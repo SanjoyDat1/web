@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { authApi } from '../lib/api/endpoints'
+import { publicApi } from '../lib/api/client'
 
 declare global {
   interface Window {
@@ -44,8 +45,6 @@ export function LoginView() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleError, setGoogleError] = useState<string | null>(null)
-  const login = useAuthStore((s) => s.login)
-  const setTokens = useAuthStore((s) => s.setTokens)
   const setUser = useAuthStore((s) => s.setUser)
   const navigate = useNavigate()
 
@@ -56,7 +55,8 @@ export function LoginView() {
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
+      const { data } = await publicApi.post('/api/v1/auth/login', { email, password })
+      setUser(data.user)
       navigate('/brain/company')
     } catch {
       setError('Invalid credentials')
@@ -73,7 +73,6 @@ export function LoginView() {
       setGoogleError(null)
       try {
         const data = await authApi.google(resp.credential)
-        setTokens(data.access_token, data.refresh_token)
         setUser(data.user)
         navigate('/brain/company')
       } catch (e: unknown) {
@@ -119,7 +118,7 @@ export function LoginView() {
     return () => {
       cancelled = true
     }
-  }, [googleClientId, navigate, setTokens, setUser])
+  }, [googleClientId, navigate, setUser])
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
@@ -157,6 +156,14 @@ export function LoginView() {
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
+          <div className="text-center">
+            <Link
+              to="/forgot-password"
+              className="text-[12px] text-stone hover:text-ink transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </form>
 
         {googleClientId && (
