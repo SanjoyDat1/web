@@ -1,0 +1,207 @@
+import { useCallback, useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+import { TopBar } from '../components/layout/TopBar'
+import { StatCard } from '../components/admin/StatCard'
+import { BrainHealthBar } from '../components/admin/BrainHealthBar'
+import { OnboardingBriefModal } from '../components/admin/OnboardingBriefModal'
+import { adminApi, type AdminStatsDTO, type AdminUserRowDTO } from '../lib/api/endpoints'
+import { NODE_TYPE_LABEL, type NodeType } from '../types/graph'
+
+function relativeFrom(iso: string): string {
+  const seconds = (Date.now() - new Date(iso).getTime()) / 1000
+  if (seconds < 60) return `${Math.floor(seconds)}s ago`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86400)}d ago`
+}
+
+function useAdminStats() {
+  const [stats, setStats] = useState<AdminStatsDTO | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null)
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await adminApi.getStats({ refresh })
+      setStats(data)
+      setRefreshedAt(new Date().toISOString())
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail === 'stats_timeout' ? 'Stats query timed out. Try again.' : "Couldn't load stats.")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  return { stats, loading, error, refresh: () => load(true), refreshedAt }
+}
+
+function useAdminUsers() {
+  const [users, setUsers] = useState<AdminUserRowDTO[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadMore = useCallback(async (resetCursor: string | null = cursor) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await adminApi.listUsers(resetCursor ?? undefined)
+      setUsers((prev) => (resetCursor ? [...prev, ...data.users] : data.users))
+      setCursor(data.next_cursor)
+    } catch {
+      setError("Couldn't load users.")
+    } finally {
+      setLoading(false)
+    }
+  }, [cursor])
+
+  useEffect(() => {
+    loadMore(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return { users, cursor, loading, error, loadMore }
+}
+
+export function AdminDashboard() {
+  const { stats, loading: statsLoading, error: statsError, refresh, refreshedAt } = useAdminStats()
+  const { users, cursor, loading: usersLoading, error: usersError, loadMore } = useAdminUsers()
+  const [briefOpen, setBriefOpen] = useState(false)
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col h-screen">
+      <TopBar title="Admin Dashboard" subtitle="Brain health & roster" />
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <p className="text-[12.5px] text-stone">
+            {refreshedAt ? `Last refreshed ${relativeFrom(refreshedAt)}` : ''}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={statsLoading}
+              className="px-3 py-1.5 rounded-xl text-[11px] uppercase tracking-[0.16em] text-stone hover:text-ink transition-colors disabled:opacity-50"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={() => setBriefOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-ink text-white text-[11px] uppercase tracking-[0.16em] hover:opacity-90 transition-opacity"
+            >
+              Generate Brief
+            </button>
+          </div>
+        </div>
+
+        {statsError && <p className="text-[13px] text-ink">{statsError}</p>}
+
+        {stats && (
+          <>
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard label="Total Nodes" value={stats.node_counts.total} />
+              <StatCard label="Active Nodes" value={stats.node_counts.active} sublabel={`${stats.node_counts.stale} stale`} />
+              <StatCard label="Users" value={stats.user_counts.total} />
+              <StatCard label="Teams" value={stats.team_count} />
+              <StatCard label="Events (7d)" value={stats.ingestion_events_7d} />
+              <StatCard label="Events (30d)" value={stats.ingestion_events_30d} />
+              <StatCard label="Active Users (30d)" value={stats.active_users_30d} />
+              <StatCard label="Slack Workspaces" value={stats.slack_workspaces_connected} />
+            </section>
+
+            <section className="p-5 rounded-xl border border-mist bg-white space-y-4">
+              <h2 className="font-display font-bold text-[14px] tracking-tightest text-ink">Brain Health</h2>
+              <BrainHealthBar label="Embedded" value={stats.brain_health.pct_embedded} />
+              <BrainHealthBar label="Fresh" value={stats.brain_health.pct_fresh} />
+            </section>
+
+            <section className="p-5 rounded-xl border border-mist bg-white space-y-3">
+              <h2 className="font-display font-bold text-[14px] tracking-tightest text-ink">Nodes by Type</h2>
+              <NodeTypeBreakdown byType={stats.node_counts.by_type} />
+            </section>
+          </>
+        )}
+
+        <section className="p-5 rounded-xl border border-mist bg-white">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-display font-bold text-[14px] tracking-tightest text-ink">Recent Users</h2>
+          </div>
+          <RecentUsersTable users={users} loading={usersLoading} error={usersError} />
+          {cursor && !usersLoading && (
+            <button
+              type="button"
+              onClick={() => loadMore(cursor)}
+              className="mt-3 text-[11px] uppercase tracking-[0.16em] text-stone hover:text-ink transition-colors"
+            >
+              Load more
+            </button>
+          )}
+        </section>
+      </div>
+
+      <OnboardingBriefModal
+        isOpen={briefOpen}
+        onClose={() => setBriefOpen(false)}
+        onGenerated={() => setBriefOpen(false)}
+      />
+    </motion.div>
+  )
+}
+
+function NodeTypeBreakdown({ byType }: { byType: Record<string, number> }) {
+  const entries = Object.entries(byType).sort((a, b) => b[1] - a[1])
+  if (entries.length === 0) {
+    return <p className="text-[12.5px] text-stone">No nodes yet.</p>
+  }
+  return (
+    <ul className="flex flex-wrap gap-2">
+      {entries.map(([type, count]) => (
+        <li
+          key={type}
+          className="px-3 py-1 rounded-full border border-mist bg-paper text-[11.5px] text-ink"
+        >
+          {NODE_TYPE_LABEL[type as NodeType] ?? type} <span className="text-stone ml-1">{count}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function RecentUsersTable({ users, loading, error }: { users: AdminUserRowDTO[]; loading: boolean; error: string | null }) {
+  if (loading && users.length === 0) return <p className="text-[12.5px] text-stone">Loading…</p>
+  if (error) return <p className="text-[12.5px] text-ink">{error}</p>
+  if (users.length === 0) return <p className="text-[12.5px] text-stone">No users yet.</p>
+  return (
+    <table className="w-full text-[12.5px]">
+      <thead>
+        <tr className="text-left text-[10px] uppercase tracking-[0.16em] text-stone">
+          <th className="py-2 font-normal">Name</th>
+          <th className="py-2 font-normal">Email</th>
+          <th className="py-2 font-normal">Role</th>
+          <th className="py-2 font-normal">Team</th>
+          <th className="py-2 font-normal">Joined</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-mist">
+        {users.map((u) => (
+          <tr key={u.id}>
+            <td className="py-2 text-ink font-medium">{u.name}</td>
+            <td className="py-2 text-graphite">{u.email}</td>
+            <td className="py-2 text-graphite">{u.role}</td>
+            <td className="py-2 text-graphite">{u.team_name ?? '—'}</td>
+            <td className="py-2 text-stone">{relativeFrom(u.created_at)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
