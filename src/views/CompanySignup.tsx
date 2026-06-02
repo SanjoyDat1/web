@@ -37,6 +37,8 @@ export function CompanySignup() {
         setError('An account with that email already exists.')
       } else if (status === 422 && detail === 'weak_password') {
         setError('Password must be at least 12 characters.')
+      } else if (status === 429 || detail === 'rate_limit_exceeded') {
+        setError('Too many attempts. Wait a few minutes and try again.')
       } else {
         setError('Something went wrong. Please try again.')
       }

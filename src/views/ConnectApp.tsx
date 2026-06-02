@@ -64,7 +64,10 @@ export function ConnectApp() {
         {/* Step 1 — Endpoint URL */}
         <Section step="1" title="Copy your endpoint URL">
           <p className="text-[13px] text-stone mb-3">
-            Enter this URL in the Penlo iOS app under <span className="font-mono text-[12px] text-ink">Settings → Enterprise → Endpoint URL</span>.
+            Enter this URL (or just the brain base URL, e.g. <span className="font-mono text-[12px]">http://localhost:8000</span>) in the Penlo iOS app under{' '}
+            <span className="font-mono text-[12px] text-ink">Settings → Enterprise Brain</span>.
+            For the Chrome meeting-capture extension, use the brain <strong>base URL</strong> only — it posts to{' '}
+            <span className="font-mono text-[12px]">/api/v1/ingest/standup</span>, not penlo-brain.
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 px-3 py-2 bg-paper border border-mist rounded-lg text-[12px] font-mono text-graphite break-all">

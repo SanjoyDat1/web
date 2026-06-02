@@ -59,6 +59,7 @@ export function Dispatch() {
   const [cards, setCards] = useState<DispatchCardDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [executorEnabled, setExecutorEnabled] = useState(false)
   const [actionState, setActionState] = useState<Record<string, ActionState>>({})
   const setPendingCount = useDispatchStore((s) => s.setPendingCount)
   const decrement = useDispatchStore((s) => s.decrement)
@@ -83,6 +84,11 @@ export function Dispatch() {
 
   useEffect(() => {
     void refresh()
+    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+    fetch(`${base}/health`)
+      .then((r) => r.json())
+      .then((data: { executor_enabled?: boolean }) => setExecutorEnabled(Boolean(data.executor_enabled)))
+      .catch(() => setExecutorEnabled(false))
   }, [refresh])
 
   function patchCard(id: string, patch: Partial<DispatchCardDTO>) {
@@ -224,14 +230,16 @@ export function Dispatch() {
                 )}
 
                 <div className="flex gap-2 items-center">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => handleApprove(card.id, 'auto')}
-                    className={`px-3 py-1.5 rounded-xl text-[11px] uppercase tracking-[0.16em] transition-colors disabled:opacity-40 ${autoClasses}`}
-                  >
-                    {action === 'auto' ? 'Starting…' : 'Auto-build'}
-                  </button>
+                  {executorEnabled && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleApprove(card.id, 'auto')}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] uppercase tracking-[0.16em] transition-colors disabled:opacity-40 ${autoClasses}`}
+                    >
+                      {action === 'auto' ? 'Starting…' : 'Auto-build'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busy}
