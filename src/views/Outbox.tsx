@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Send } from 'lucide-react'
 import { TopBar } from '../components/layout/TopBar'
 import { broadcastsApi, type PendingBroadcastDTO } from '../lib/api/endpoints'
+import { markEntityNotificationsRead } from '../lib/notifications/orchestrator'
 import { useGraphStore } from '../store/graphStore'
 import { useOutboxStore } from '../store/outboxStore'
 import type { PageProps } from '../types/layout'
@@ -96,6 +97,7 @@ export function Outbox({ onMenuClick }: PageProps) {
       await broadcastsApi.approve(id)
       setRows((prev) => prev.filter((r) => r.id !== id))
       decrement()
+      markEntityNotificationsRead(id)
     } catch (exc) {
       console.error(exc)
       setActionErrorId(id)
@@ -111,6 +113,7 @@ export function Outbox({ onMenuClick }: PageProps) {
       await broadcastsApi.discard(id)
       setRows((prev) => prev.filter((r) => r.id !== id))
       decrement()
+      markEntityNotificationsRead(id)
     } catch (exc) {
       console.error(exc)
       setActionErrorId(id)

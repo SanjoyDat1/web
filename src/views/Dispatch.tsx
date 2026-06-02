@@ -4,6 +4,7 @@ import { Inbox } from 'lucide-react'
 import { TopBar } from '../components/layout/TopBar'
 import { dispatchApi, type DispatchCardDTO } from '../lib/api/endpoints'
 import { useDispatchStore, type BuildPhase } from '../store/dispatchStore'
+import { markEntityNotificationsRead } from '../lib/notifications/orchestrator'
 import { DispatchCard, CardSkeleton, EmptyState } from '../components/ui'
 
 type ActionState = 'idle' | 'auto' | 'queue' | 'discarding' | 'error'
@@ -110,6 +111,7 @@ export function Dispatch({ onMenuClick }: Props) {
       patchCard(id, { status: updated.status, mode: updated.mode })
       setActionState((s) => ({ ...s, [id]: 'idle' }))
       decrement()
+      markEntityNotificationsRead(id)
     } catch (exc) {
       console.error(exc)
       setActionState((s) => ({ ...s, [id]: 'error' }))
@@ -122,6 +124,7 @@ export function Dispatch({ onMenuClick }: Props) {
       await dispatchApi.discard(id)
       setCards((prev) => prev.filter((c) => c.id !== id))
       decrement()
+      markEntityNotificationsRead(id)
     } catch (exc) {
       console.error(exc)
       setActionState((s) => ({ ...s, [id]: 'error' }))

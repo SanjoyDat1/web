@@ -9,6 +9,7 @@ import { handleNotificationPayload } from '../notifications/orchestrator'
 import { api } from '../api/client'
 
 const WS_BASE = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
+const COUNT_DEBOUNCE_MS = 2000
 
 class BrainWSClient {
   private ws: WebSocket | null = null
@@ -19,9 +20,37 @@ class BrainWSClient {
   private intentionalClose = false
   private _buffer: WSMessage[] = []
   private _unsubHydration: (() => void) | null = null
+  private _dispatchPendingTimer: ReturnType<typeof setTimeout> | null = null
+  private _broadcastPendingTimer: ReturnType<typeof setTimeout> | null = null
+  private _pendingDispatchCount: number | null = null
+  private _pendingBroadcastCount: number | null = null
 
   private _setConnected(connected: boolean): void {
     useNotificationStore.getState().setWsConnected(connected)
+  }
+
+  private _debouncedDispatchCount(count: number): void {
+    this._pendingDispatchCount = count
+    if (this._dispatchPendingTimer) return
+    this._dispatchPendingTimer = setTimeout(() => {
+      if (this._pendingDispatchCount !== null) {
+        useDispatchStore.getState().setPendingCount(this._pendingDispatchCount)
+      }
+      this._pendingDispatchCount = null
+      this._dispatchPendingTimer = null
+    }, COUNT_DEBOUNCE_MS)
+  }
+
+  private _debouncedBroadcastCount(count: number): void {
+    this._pendingBroadcastCount = count
+    if (this._broadcastPendingTimer) return
+    this._broadcastPendingTimer = setTimeout(() => {
+      if (this._pendingBroadcastCount !== null) {
+        useOutboxStore.getState().setPendingCount(this._pendingBroadcastCount)
+      }
+      this._pendingBroadcastCount = null
+      this._broadcastPendingTimer = null
+    }, COUNT_DEBOUNCE_MS)
   }
 
   connect(companyId: string): void {
@@ -135,13 +164,13 @@ class BrainWSClient {
         break
       }
       case 'broadcast_pending':
-        useOutboxStore.getState().setPendingCount(msg.payload.count)
+        this._debouncedBroadcastCount(msg.payload.count)
         break
       case 'broadcast_acted':
         useOutboxStore.getState().removeById(msg.payload.id)
         break
       case 'dispatch_pending':
-        useDispatchStore.getState().setPendingCount(msg.payload.count)
+        this._debouncedDispatchCount(msg.payload.count)
         break
       case 'dispatch_building':
         useDispatchStore.getState().setBuildState(msg.payload.dispatch_id, { phase: 'building' })

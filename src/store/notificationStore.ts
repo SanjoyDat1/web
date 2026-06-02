@@ -90,13 +90,15 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   bootstrap: async () => {
     try {
-      const [countRes, listRes] = await Promise.all([
+      const [countRes, listRes, prefsRes] = await Promise.all([
         notificationsApi.count(),
         notificationsApi.list({ limit: 50 }),
+        notificationsApi.getPreferences(),
       ])
       set({
         unreadCount: countRes.count,
         items: listRes,
+        preferences: prefsRes,
         loaded: true,
       })
     } catch (exc) {

@@ -1,4 +1,3 @@
-import type { WSMessage } from '../../types/ws'
 import type { NotificationDTO } from '../../types/notification'
 import { useNotificationStore } from '../../store/notificationStore'
 import { useAuthStore } from '../../store/authStore'
@@ -26,47 +25,11 @@ export function handleNotificationPayload(payload: NotificationDTO): void {
   }
 }
 
-/** Map legacy domain WS events to toasts when no persisted notification exists yet. */
-export function handleDomainEventForToast(msg: WSMessage): void {
+export function markEntityNotificationsRead(entityId: string): void {
   const store = useNotificationStore.getState()
-  switch (msg.type) {
-    case 'dispatch_pending':
-      store.addToast({
-        title: 'New dispatch',
-        body: `${msg.payload.count} item${msg.payload.count === 1 ? '' : 's'} awaiting approval`,
-        severity: 'critical',
-        actionUrl: '/dispatch',
-        sticky: true,
-      })
-      break
-    case 'broadcast_pending':
-      store.addToast({
-        title: 'Outbox',
-        body: 'A Slack broadcast is ready for approval',
-        severity: 'critical',
-        actionUrl: '/outbox',
-        sticky: true,
-      })
-      break
-    case 'dispatch_complete':
-      store.addToast({
-        title: 'Dispatch complete',
-        body: 'A pull request was opened',
-        severity: 'important',
-        actionUrl: '/dispatch',
-        sticky: false,
-      })
-      break
-    case 'dispatch_failed':
-      store.addToast({
-        title: 'Dispatch failed',
-        body: msg.payload.error,
-        severity: 'critical',
-        actionUrl: '/dispatch',
-        sticky: true,
-      })
-      break
-    default:
-      break
+  for (const item of store.items) {
+    if (item.entity_id === entityId && !item.read_at) {
+      void store.markRead(item.id)
+    }
   }
 }
