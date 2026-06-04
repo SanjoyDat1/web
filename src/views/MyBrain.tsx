@@ -1,13 +1,11 @@
-import { useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { useCallback, useEffect, useState } from 'react'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
-import { GraphControls } from '../components/graph/GraphControls'
-import { NodeDetailPanel } from '../components/graph/NodeDetailPanel'
-import { TopBar } from '../components/layout/TopBar'
+import { BrainGraphLayout } from '../components/graph/BrainGraphLayout'
 import { useGraphStore } from '../store/graphStore'
 import { graphApi } from '../lib/api/endpoints'
+import type { PageProps } from '../types/layout'
 
-export function MyBrain() {
+export function MyBrain({ onMenuClick }: PageProps) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const hiddenTypes = useGraphStore((s) => s.hiddenTypes)
@@ -17,42 +15,42 @@ export function MyBrain() {
   const setGraph = useGraphStore((s) => s.setGraph)
   const setLoading = useGraphStore((s) => s.setLoading)
   const layoutMode = useGraphStore((s) => s.layoutMode)
+  const loading = useGraphStore((s) => s.isLoading)
+  const [error, setError] = useState(false)
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(false)
     setLoading(true)
-    graphApi.me()
+    graphApi
+      .me()
       .then((data) => setGraph(data.nodes, data.edges))
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [setGraph, setLoading])
 
+  useEffect(() => {
+    void load()
+  }, [load])
+
   return (
-    <motion.div
-      key="my-brain"
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.2 }}
-      className="flex flex-col h-screen"
+    <BrainGraphLayout
+      title="My Brain"
+      subtitle="Personal context"
+      useTimelineEyebrow
+      onMenuClick={onMenuClick}
+      loading={loading}
+      error={error}
+      onRetry={load}
     >
-      <TopBar title="My Brain" subtitle="Personal context · Live" />
-
-      <div className="px-6 pt-4 pb-2">
-        <GraphControls />
-      </div>
-
-      <div className="flex-1 relative mx-6 mb-6 rounded-2xl border border-mist overflow-hidden bg-white">
-        <GraphCanvas
-          nodes={Array.from(nodes.values())}
-          edges={Array.from(edges.values())}
-          hiddenTypes={hiddenTypes}
-          searchQuery={searchQuery}
-          selectedId={selectedId}
-          onSelect={setSelected}
-          layoutMode={layoutMode}
-        />
-        <NodeDetailPanel selectedId={selectedId} onClose={() => setSelected(null)} />
-      </div>
-    </motion.div>
+      <GraphCanvas
+        nodes={Array.from(nodes.values())}
+        edges={Array.from(edges.values())}
+        hiddenTypes={hiddenTypes}
+        searchQuery={searchQuery}
+        selectedId={selectedId}
+        onSelect={setSelected}
+        layoutMode={layoutMode}
+      />
+    </BrainGraphLayout>
   )
 }

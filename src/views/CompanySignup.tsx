@@ -1,12 +1,46 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { authApi } from '../lib/api/endpoints'
+import { extractApiError } from '../lib/api/errors'
 import { useAuthStore } from '../store/authStore'
+import { AuthLayout, AuthFooterLink } from '../components/ui'
+
+function PasswordStrength({ password }: { password: string }) {
+  const len = password.length
+  const hasUpper = /[A-Z]/.test(password)
+  const hasNumber = /[0-9]/.test(password)
+  const hasSpecial = /[^a-zA-Z0-9]/.test(password)
+  const score = (len >= 12 ? 1 : 0) + (hasUpper ? 1 : 0) + (hasNumber ? 1 : 0) + (hasSpecial ? 1 : 0)
+
+  if (!password) return null
+  const labels = ['Weak', 'Fair', 'Good', 'Strong']
+  const colors = ['bg-destructive', 'bg-warning', 'bg-yellow-400', 'bg-success']
+  const textColors = ['text-destructive', 'text-warning', 'text-yellow-600', 'text-success']
+
+  return (
+    <div className="space-y-1.5 mt-1.5">
+      <div className="flex gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`flex-1 h-1 rounded-full transition-colors ${i < score ? colors[score - 1] : 'bg-black/[0.08]'}`}
+          />
+        ))}
+      </div>
+      <p className={`text-[11px] font-medium ${score > 0 ? textColors[score - 1] : 'text-text-tertiary'}`}>
+        {score > 0 ? labels[score - 1] : ''}
+        {score < 4 && score > 0 ? ' — use uppercase, numbers, and symbols for a stronger password' : ''}
+      </p>
+    </div>
+  )
+}
 
 export function CompanySignup() {
   const navigate = useNavigate()
   const setUser = useAuthStore((s) => s.setUser)
   const [form, setForm] = useState({ company_name: '', admin_name: '', admin_email: '', admin_password: '' })
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -37,8 +71,12 @@ export function CompanySignup() {
         setError('An account with that email already exists.')
       } else if (status === 422 && detail === 'weak_password') {
         setError('Password must be at least 12 characters.')
+      } else if (status === 429 || detail === 'rate_limit_exceeded') {
+        setError('Too many attempts. Wait a few minutes and try again.')
+      } else if (status === 400 && detail === 'invalid_company_name') {
+        setError('Company name must include at least one letter or number.')
       } else {
-        setError('Something went wrong. Please try again.')
+        setError(extractApiError(err, 'Something went wrong. Please try again.'))
       }
     } finally {
       setLoading(false)
@@ -46,71 +84,110 @@ export function CompanySignup() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <div className="w-full max-w-sm px-8">
-        <div className="mb-10 animate-reveal">
-          <div className="text-[9.5px] uppercase tracking-[0.22em] text-stone mb-2">Penlo</div>
-          <h1 className="font-display font-bold text-[28px] tracking-tightest text-ink leading-none">
-            Create your company
-          </h1>
-          <p className="mt-3 text-[14px] text-stone leading-relaxed">
-            Set up your Enterprise Brain and create an admin account.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 animate-reveal" style={{ animationDelay: '0.05s' }}>
+    <AuthLayout
+      title="Create your company"
+      subtitle="Set up your Enterprise Brain and create an admin account."
+      footer={
+        <p>
+          Already have an account?{' '}
+          <AuthFooterLink to="/login">Sign in</AuthFooterLink>
+        </p>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="space-y-1">
+          <label className="text-[12px] font-medium text-text-secondary" htmlFor="company_name">
+            Company name
+          </label>
           <input
+            id="company_name"
             type="text"
             value={form.company_name}
             onChange={set('company_name')}
-            placeholder="Company name"
+            placeholder="Acme Inc."
             required
             autoFocus
-            className="w-full px-4 py-2.5 border border-mist rounded-xl text-[14px] text-ink placeholder-stone focus:outline-none focus:border-graphite transition-colors"
+            autoComplete="organization"
+            className="input-field"
           />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[12px] font-medium text-text-secondary" htmlFor="admin_name">
+            Your name
+          </label>
           <input
+            id="admin_name"
             type="text"
             value={form.admin_name}
             onChange={set('admin_name')}
-            placeholder="Your name"
+            placeholder="Jane Smith"
             required
-            className="w-full px-4 py-2.5 border border-mist rounded-xl text-[14px] text-ink placeholder-stone focus:outline-none focus:border-graphite transition-colors"
+            autoComplete="name"
+            className="input-field"
           />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[12px] font-medium text-text-secondary" htmlFor="admin_email">
+            Work email
+          </label>
           <input
+            id="admin_email"
             type="email"
             value={form.admin_email}
             onChange={set('admin_email')}
-            placeholder="Email"
+            placeholder="jane@acme.com"
             required
-            className="w-full px-4 py-2.5 border border-mist rounded-xl text-[14px] text-ink placeholder-stone focus:outline-none focus:border-graphite transition-colors"
+            autoComplete="email"
+            className="input-field"
           />
-          <input
-            type="password"
-            value={form.admin_password}
-            onChange={set('admin_password')}
-            placeholder="Password (min 12 characters)"
-            required
-            minLength={12}
-            className="w-full px-4 py-2.5 border border-mist rounded-xl text-[14px] text-ink placeholder-stone focus:outline-none focus:border-graphite transition-colors"
-          />
-          {error && (
-            <p className="text-[13px] text-red-500">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-ink text-white rounded-xl text-[14px] font-medium hover:bg-graphite transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Creating…' : 'Create company'}
-          </button>
-          <Link
-            to="/login"
-            className="block text-center text-[12px] uppercase tracking-[0.16em] text-stone hover:text-ink transition-colors"
-          >
-            Back to sign in
-          </Link>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[12px] font-medium text-text-secondary" htmlFor="admin_password">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              id="admin_password"
+              type={showPassword ? 'text' : 'password'}
+              value={form.admin_password}
+              onChange={set('admin_password')}
+              placeholder="Min 12 characters"
+              required
+              minLength={12}
+              autoComplete="new-password"
+              className="input-field pr-10"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary transition-colors"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <PasswordStrength password={form.admin_password} />
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-destructive-tint">
+            <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+            <p className="text-[12px] text-destructive leading-tight">{error}</p>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full h-11 mt-1 rounded-xl bg-accent text-white font-semibold text-[14px] flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-60 transition-colors focus-ring"
+        >
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {loading ? 'Creating…' : 'Create company'}
+        </button>
+      </form>
+    </AuthLayout>
   )
 }
